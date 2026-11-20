@@ -1,15 +1,159 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lim Eunju</title>
+  <title>Lim Eunju | 공연 아카이브</title>
   <style>
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f0e8; color: #29241e; }
-    h1 { margin: 0; padding: 1rem; font: 400 clamp(3rem, 10vw, 8rem)/1.1 Georgia, serif; text-align: center; }
+    * { box-sizing: border-box }
+    body { margin: 0 auto; max-width: 76rem; padding: 0 clamp(1.25rem, 6vw, 5rem); background: #f4f0e8; color: #29241e; font-family: system-ui, sans-serif }
+    header { padding: clamp(3rem, 9vw, 8rem) 0 2.5rem; border-bottom: 1px solid #b8a999 }
+    h1 { margin: 0; font: 400 clamp(3.6rem, 11vw, 8rem)/.95 Georgia, serif }
+    header p { margin: 1.3rem 0 0; letter-spacing: .12em }
+    main { padding: 2rem 0 5rem }
+    .filters { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: end }
+    label { display: grid; gap: .4rem; font-size: .9rem }
+    select { min-width: 9rem; padding: .6rem; border: 1px solid #8b7970; border-radius: .2rem; background: #fffaf2; color: inherit; font: inherit }
+    #status { color: #66574d; margin: 2rem 0 }
+    #works { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,16rem),1fr)); gap: 1.5rem }
+    article { min-width: 0; padding: 1rem 0; border-top: 1px solid #b8a999 }
+    article img, #detail img { display: block; max-width: 100%; height: auto }
+    article img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover }
+    a { color: #783c27; text-underline-offset: .2em }
+    #detail { max-width: 52rem }
+    #detail section { margin-top: 2rem }
+    figure { margin: 1rem 0 }
   </style>
 </head>
 <body>
-  <main><h1>Lim Eunju</h1></main>
+  <header>
+    <h1>Lim Eunju</h1>
+    <p>공연 아카이브</p>
+  </header>
+  <main>
+    <div id="listing">
+      <div class="filters">
+        <label>역할
+          <select id="role">
+            <option value="">전체 역할</option>
+            <option>연출</option><option>무대</option><option>의상</option><option>인형</option>
+          </select>
+        </label>
+        <label>연도
+          <select id="year"><option value="">전체 연도</option></select>
+        </label>
+      </div>
+      <p id="status" role="status"></p>
+      <div id="works"></div>
+    </div>
+    <div id="detail" hidden></div>
+  </main>
+  <script type="application/json" id="archive-data">
+    []
+  </script>
+  <script>
+    const works = JSON.parse(document.querySelector('#archive-data').textContent);
+    const role = document.querySelector('#role');
+    const year = document.querySelector('#year');
+    const status = document.querySelector('#status');
+    const cards = document.querySelector('#works');
+    const listing = document.querySelector('#listing');
+    const detail = document.querySelector('#detail');
+
+    function add(parent, tag, text) {
+      const element = document.createElement(tag);
+      if (text !== undefined) element.textContent = text;
+      parent.append(element);
+      return element;
+    }
+
+    function image(parent, photo) {
+      const img = add(parent, 'img');
+      img.src = photo.src;
+      img.alt = photo.alt || '';
+      img.loading = 'lazy';
+    }
+
+    const years = [...new Set(works.flatMap(work => work.performances.map(show => show.year)))];
+    for (const value of years.sort((a, b) => b - a)) {
+      year.add(new Option(value, value));
+    }
+
+    function renderList() {
+      cards.replaceChildren();
+      const matches = works.filter(work => work.performances.some(show =>
+        (!year.value || String(show.year) === year.value) &&
+        (!role.value || show.roles.includes(role.value))
+      ));
+      const latest = work => Math.max(...work.performances.map(show => show.year));
+      matches.sort((a, b) => latest(b) - latest(a));
+      for (const work of matches) {
+        const card = add(cards, 'article');
+        const link = add(card, 'a');
+        link.href = '#work/' + encodeURIComponent(work.id);
+        if (work.cover) image(link, work.cover);
+        add(link, 'h2', work.title);
+        const showYears = [...new Set(work.performances.map(show => show.year))].sort((a, b) => b - a);
+        const roles = [...new Set(work.performances.flatMap(show => show.roles))];
+        add(card, 'p', showYears.join(', ') + ' · ' + roles.join(', '));
+      }
+      status.textContent = matches.length ? '작품 ' + matches.length + '개' :
+        works.length ? '선택한 역할과 연도에 해당하는 작품이 없습니다.' : '등록된 공연이 없습니다.';
+    }
+
+    function renderPage() {
+      const work = works.find(entry => location.hash === '#work/' + encodeURIComponent(entry.id));
+      listing.hidden = Boolean(work);
+      detail.hidden = !work;
+      detail.replaceChildren();
+      if (!work) {
+        document.title = 'Lim Eunju | 공연 아카이브';
+        renderList();
+        return;
+      }
+      document.title = work.title + ' | Lim Eunju';
+      add(detail, 'a', '← 전체 작품').href = '#';
+      add(detail, 'h2', work.title);
+      if (work.cover) image(detail, work.cover);
+      const history = add(detail, 'section');
+      add(history, 'h3', '공연 이력');
+      for (const show of [...work.performances].sort((a, b) => b.year - a.year)) {
+        add(history, 'h4', String(show.year));
+        add(history, 'p', [show.dates, show.venue, show.company, show.roles.join(', ')].filter(Boolean).join(' · '));
+      }
+      const contribution = add(detail, 'section');
+      add(contribution, 'h3', '나의 작업');
+      for (const item of work.contributions || []) {
+        add(contribution, 'h4', item.role);
+        add(contribution, 'p', item.description);
+      }
+      if (work.photos?.length || work.videos?.length) {
+        const records = add(detail, 'section');
+        add(records, 'h3', '사진과 작업 기록');
+        for (const photo of work.photos || []) {
+          const figure = add(records, 'figure');
+          image(figure, photo);
+          if (photo.caption) add(figure, 'figcaption', photo.caption);
+        }
+        for (const video of work.videos || []) {
+          const url = new URL(video.url, location.href);
+          if (url.protocol === 'https:' || url.protocol === 'http:') {
+            add(add(records, 'p'), 'a', video.label).href = url.href;
+          }
+        }
+      }
+      if (work.credits?.length) {
+        const credits = add(detail, 'section');
+        add(credits, 'h3', '크레딧');
+        const list = add(credits, 'ul');
+        for (const credit of work.credits) add(list, 'li', credit);
+      }
+    }
+
+    role.addEventListener('change', renderList);
+    year.addEventListener('change', renderList);
+    window.addEventListener('hashchange', renderPage);
+    renderPage();
+  </script>
 </body>
 </html>
